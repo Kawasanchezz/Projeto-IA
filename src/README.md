@@ -31,3 +31,6 @@ Ollama server
 #3. Rodar a aplicação
 streamlit run src/app.py
 ```
+
+# Evidências de Execução
+....
