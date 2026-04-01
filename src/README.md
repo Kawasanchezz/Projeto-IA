@@ -13,11 +13,8 @@ ollama run gpt-oss "Olá!"
 
 ## Código Completo
 
-```bash
+Todo código-fonte está no arquivo `app.py`.
 
-Todo código-fonte está no arquivo "app.py"
-
-```
 
 ## Como Rodar
 
