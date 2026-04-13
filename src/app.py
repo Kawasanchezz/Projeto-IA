@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 
 #==== CONFIGURAÇÃO ====
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_URL = "http://localhost:11434/api/chat"
 MODELO     = "llama3"
 DATA_DIR   = Path("./data")
 
@@ -91,27 +91,31 @@ def perguntar(msg: str, contexto: str) -> str:
     if not msg or not msg.strip():
         return "Por favor, digite uma pergunta."
 
-    prompt = f"""{SYSTEM_PROMPT}
-
-CONTATO DO CLIENTE:
-{contexto}
-
-Pergunta: {msg.strip()}"""
+    mensagens = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": f"{contexto}\n\nPergunta: {msg.strip()}"}
+    ]
 
     try:
         r = requests.post(
             OLLAMA_URL,
-            json={"model": MODELO, "prompt": prompt, "stream": False},
+            json={
+                "model": MODELO,
+                "messages": mensagens,
+                "stream": False
+            },
             timeout=60
         )
         r.raise_for_status()
-        resposta = r.json().get('response', '').strip()
+
+        resposta = r.json().get("message", {}).get("content", "").strip()
+
         return resposta if resposta else "Não obtive resposta do modelo."
 
     except requests.exceptions.ConnectionError:
-        return "Erro: não foi possível conectar ao Ollama. Verifique se ele está rodando."
+        return "Erro: não foi possível conectar ao Ollama."
     except requests.exceptions.Timeout:
-        return "Erro: o modelo demorou demais para responder. Tente novamente."
+        return "Erro: o modelo demorou demais para responder."
     except requests.exceptions.HTTPError as e:
         return f"Erro HTTP: {e}"
     except (KeyError, ValueError):
