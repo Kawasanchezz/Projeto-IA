@@ -70,10 +70,10 @@ flowchart TD
 
 ### Estratégias Adotadas
 
-- [ ] [ex: Agente só responde com base nos dados fornecidos]
-- [ ] [ex: Respostas incluem fonte da informação]
-- [ ] [ex: Quando não sabe, admite e redireciona]
-- [ ] [ex: Não faz recomendações de investimento sem perfil do cliente]
+- [X] [ex: Agente só responde com base nos dados fornecidos]
+- [X] [ex: Respostas incluem fonte da informação]
+- [X] [ex: Quando não sabe, admite e redireciona]
+- [X] [ex: Não faz recomendações de investimento sem perfil do cliente]
 
 ### Limitações Declaradas
 > O que o agente NÃO faz?
