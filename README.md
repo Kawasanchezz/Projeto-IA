@@ -117,9 +117,6 @@ Todas as ferramentas abaixo possuem versões gratuitas:
 │
 ├── 📁 assets/                        # Imagens e diagramas
 │   └── ...
-│
-└── 📁 examples/                      # Referências e exemplos
-    └── README.md
 ```
 
 ---
