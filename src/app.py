@@ -1,14 +1,14 @@
 import json
-import requests # type: ignore
-import streamlit as st # type: ignore
-import pandas as pd # type: ignore
+import requests
+import streamlit as st
+import pandas as pd
 from pathlib import Path
 
 # ==== CONFIGURAÇÃO ====
 OLLAMA_URL = "http://localhost:11434/api/chat"
 
-# 🔥 MODELO LEVE (IMPORTANTE)
-MODELO = "phi3"
+# 🔥 ULTRA LEVE (AGORA FUNCIONA NO SEU PC)
+MODELO = "tinyllama"
 
 DATA_DIR = Path("./data")
 
@@ -40,34 +40,26 @@ def carregar_dados():
         st.stop()
 
 # ==== SYSTEM PROMPT ====
-SYSTEM_PROMPT = """Você é o Credix, um educador financeiro amigável e didático.
+SYSTEM_PROMPT = """Você é o Credix, um educador financeiro simples e didático.
 
-OBJETIVO:
-Ensinar finanças pessoais de forma simples usando exemplos do cliente.
-
-REGRAS:
-- Nunca recomende investimentos específicos
-- Não responda fora do tema finanças pessoais
-- Use linguagem simples
-- Use os dados do cliente como exemplo
-- Seja direto (máximo 3 parágrafos)
-- Sempre pergunte se o cliente entendeu
+Explique tudo de forma MUITO simples e curta.
+Não recomende investimentos.
+Use exemplos básicos.
+No máximo 2 parágrafos.
+Sempre pergunte se entendeu.
 """
 
-# ==== CONTEXTO ====
+# ==== CONTEXTO (ENXUGADO PRA FICAR MAIS LEVE) ====
 def montar_contexto(perfil, produtos, transacoes, historico):
     return f"""
-Cliente: {perfil['nome']} ({perfil['idade']} anos)
+Cliente: {perfil['nome']}
+Idade: {perfil['idade']}
 Perfil: {perfil['perfil_investidor']}
 Objetivo: {perfil['objetivo_principal']}
 Patrimônio: R$ {perfil['patrimonio_total']}
-Reserva: R$ {perfil['reserva_emergencia_atual']}
 
-Transações recentes:
-{transacoes.tail(5).to_string(index=False)}
-
-Histórico:
-{historico.tail(5).to_string(index=False)}
+Últimas transações:
+{transacoes.tail(3).to_string(index=False)}
 """
 
 # ==== CHAMAR OLLAMA ====
@@ -87,10 +79,9 @@ def perguntar(pergunta, contexto):
         )
 
         if response.status_code != 200:
-            return f"Erro HTTP: {response.status_code} - {response.text}"
+            return f"Erro HTTP: {response.status_code}"
 
         data = response.json()
-
         return data["message"]["content"].strip()
 
     except requests.exceptions.ConnectionError:
@@ -104,24 +95,19 @@ def perguntar(pergunta, contexto):
 st.set_page_config(page_title="Credix", layout="centered")
 st.title("💰 Credix - Educador Financeiro")
 
-# verificar ollama
 if not iniciar_ollama():
     st.error("Ollama não está rodando. Execute: ollama serve")
     st.stop()
 
-# carregar dados
 perfil, produtos, transacoes, historico = carregar_dados()
 contexto = montar_contexto(perfil, produtos, transacoes, historico)
 
-# memória do chat
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
-# mostrar histórico
 for msg in st.session_state.chat:
     st.chat_message(msg["role"]).write(msg["content"])
 
-# input
 pergunta_user = st.chat_input("Pergunte sobre finanças...")
 
 if pergunta_user:
