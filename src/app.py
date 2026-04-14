@@ -1,152 +1,135 @@
 import json
-import subprocess
-import time
-import requests
-import streamlit as st
-import pandas as pd
+import requests # type: ignore
+import streamlit as st # type: ignore
+import pandas as pd # type: ignore
 from pathlib import Path
 
-#==== CONFIGURAÇÃO ====
+# ==== CONFIGURAÇÃO ====
 OLLAMA_URL = "http://localhost:11434/api/chat"
-MODELO     = "llama3"
-DATA_DIR   = Path("./data")
 
-#==== INICIAR OLLAMA AUTOMATICAMENTE ====
+# 🔥 MODELO LEVE (IMPORTANTE)
+MODELO = "phi3"
+
+DATA_DIR = Path("./data")
+
+# ==== VERIFICAR OLLAMA ====
 def iniciar_ollama():
     try:
-        r = requests.get("http://localhost:11434", timeout=3)
-        if r.status_code == 200:
-            return True
-    except requests.exceptions.ConnectionError:
-        pass
-
-    try:
-        subprocess.Popen(
-            ["ollama", "serve"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW  # sem janela no Windows
-        )
-        time.sleep(3)
-        return True
-    except FileNotFoundError:
+        r = requests.get("http://localhost:11434", timeout=2)
+        return r.status_code == 200
+    except:
         return False
 
-#===== CARREGAR DADOS ======
+# ==== CARREGAR DADOS ====
 @st.cache_data
 def carregar_dados():
     try:
         with open(DATA_DIR / 'perfil_investidor.json', encoding='utf-8') as f:
             perfil = json.load(f)
+
         with open(DATA_DIR / 'produtos_financeiros.json', encoding='utf-8') as f:
             produtos = json.load(f)
 
         transacoes = pd.read_csv(DATA_DIR / 'transacoes.csv')
-        historico  = pd.read_csv(DATA_DIR / 'historico_atendimento.csv')
+        historico = pd.read_csv(DATA_DIR / 'historico_atendimento.csv')
+
         return perfil, produtos, transacoes, historico
 
-    except FileNotFoundError as e:
-        st.error(f"Arquivo não encontrado: {e}")
-        st.stop()
-    except (json.JSONDecodeError, pd.errors.ParserError) as e:
-        st.error(f"Erro ao ler arquivo: {e}")
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
         st.stop()
 
-#==== SYSTEM PROMPT ====
-SYSTEM_PROMPT = """Você é o Credix, um educador financeiro amigavel e didático.
+# ==== SYSTEM PROMPT ====
+SYSTEM_PROMPT = """Você é o Credix, um educador financeiro amigável e didático.
 
 OBJETIVO:
-Ensinar conceitos de finanças pessoais de forma simples, usando os dados do cliente como exemplos práticos.
+Ensinar finanças pessoais de forma simples usando exemplos do cliente.
 
 REGRAS:
--NUNCA recomende investimentos específicos, apenas explique como funcionam;
--JAMAIS responder a pergunta fora do tema ensino de finança pessoais,
-Quando ocorrer, responda lembrano o seu papel de educador financeiro;
--Use os dados fornecidos para dar exemplos personalizados;
--Linguagem simples, como explicasse para um amigo;
--Se não souber algo, admita: "Não tenho essa informação, mas posso explicar...";
--Sempre perguntar se o cliente entendeu;
--Responda de forma sucinta e direta, com maximo 3 parágrafos;
+- Nunca recomende investimentos específicos
+- Não responda fora do tema finanças pessoais
+- Use linguagem simples
+- Use os dados do cliente como exemplo
+- Seja direto (máximo 3 parágrafos)
+- Sempre pergunte se o cliente entendeu
 """
 
-#==== MONTAR CONTEXTO ====
+# ==== CONTEXTO ====
 def montar_contexto(perfil, produtos, transacoes, historico):
     return f"""
-Clientes: {perfil['nome']}, {perfil['idade']} anos, perfil {perfil['perfil_investidor']}
-OBJETIVO: {perfil['objetivo_principal']}
-PATRIMÔNIO: R$ {perfil['patrimonio_total']} | RESERVA: R$ {perfil['reserva_emergencia_atual']}
+Cliente: {perfil['nome']} ({perfil['idade']} anos)
+Perfil: {perfil['perfil_investidor']}
+Objetivo: {perfil['objetivo_principal']}
+Patrimônio: R$ {perfil['patrimonio_total']}
+Reserva: R$ {perfil['reserva_emergencia_atual']}
 
-TRANSAÇÕES RECENTES:
-{transacoes.to_string(index=False)}
+Transações recentes:
+{transacoes.tail(5).to_string(index=False)}
 
-ATENDIMENTOS ANTERIORES:
-{historico.to_string(index=False)}
-
-PRODUTOS DISPONÍVEIS:
-{json.dumps(produtos, indent=2, ensure_ascii=False)}
+Histórico:
+{historico.tail(5).to_string(index=False)}
 """
 
-#==== CHAMAR OLLAMA ====
-def perguntar(msg: str, contexto: str) -> str:
-    if not msg or not msg.strip():
-        return "Por favor, digite uma pergunta."
-
-    mensagens = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"{contexto}\n\nPergunta: {msg.strip()}"}
-    ]
-
+# ==== CHAMAR OLLAMA ====
+def perguntar(pergunta, contexto):
     try:
-        r = requests.post(
+        response = requests.post(
             OLLAMA_URL,
             json={
                 "model": MODELO,
-                "messages": mensagens,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"{contexto}\n\nPergunta: {pergunta}"}
+                ],
                 "stream": False
             },
             timeout=60
         )
-        r.raise_for_status()
 
-        resposta = r.json().get("message", {}).get("content", "").strip()
+        if response.status_code != 200:
+            return f"Erro HTTP: {response.status_code} - {response.text}"
 
-        return resposta if resposta else "Não obtive resposta do modelo."
+        data = response.json()
+
+        return data["message"]["content"].strip()
 
     except requests.exceptions.ConnectionError:
-        return "Erro: não foi possível conectar ao Ollama."
+        return "Erro: Ollama não está rodando."
     except requests.exceptions.Timeout:
-        return "Erro: o modelo demorou demais para responder."
-    except requests.exceptions.HTTPError as e:
-        return f"Erro HTTP: {e}"
-    except (KeyError, ValueError):
-        return "Erro: resposta inesperada do modelo."
+        return "Erro: demora na resposta."
+    except Exception as e:
+        return f"Erro: {e}"
 
-#=== INTERFACE ===
-st.title("| Credix, seu educador Financeiro")
+# ==== INTERFACE ====
+st.set_page_config(page_title="Credix", layout="centered")
+st.title("💰 Credix - Educador Financeiro")
 
-# Inicia Ollama se não estiver rodando
+# verificar ollama
 if not iniciar_ollama():
-    st.error("Ollama não encontrado. Instale em: https://ollama.com/download")
+    st.error("Ollama não está rodando. Execute: ollama serve")
     st.stop()
 
-# Carrega dados
+# carregar dados
 perfil, produtos, transacoes, historico = carregar_dados()
 contexto = montar_contexto(perfil, produtos, transacoes, historico)
 
-# Histórico do chat
-if "mensagens" not in st.session_state:
-    st.session_state.mensagens = []
+# memória do chat
+if "chat" not in st.session_state:
+    st.session_state.chat = []
 
-for msg in st.session_state.mensagens:
+# mostrar histórico
+for msg in st.session_state.chat:
     st.chat_message(msg["role"]).write(msg["content"])
 
-# Nova pergunta
-if pergunta := st.chat_input("Sua dúvida sobre finanças..."):
-    st.session_state.mensagens.append({"role": "user", "content": pergunta})
-    st.chat_message("user").write(pergunta)
+# input
+pergunta_user = st.chat_input("Pergunte sobre finanças...")
+
+if pergunta_user:
+    st.session_state.chat.append({"role": "user", "content": pergunta_user})
+    st.chat_message("user").write(pergunta_user)
 
     with st.spinner("Pensando..."):
-        resposta = perguntar(pergunta, contexto)
+        resposta = perguntar(pergunta_user, contexto)
 
-    st.session_state.mensagens.append({"role": "assistant", "content": resposta})
+    st.session_state.chat.append({"role": "assistant", "content": resposta})
     st.chat_message("assistant").write(resposta)
